@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://stats-db:5432/ewm_stats
+    username: stats
+    password: stats
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: false
