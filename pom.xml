@@ -12,6 +12,7 @@
 
 	<modules>
 		<module>ewm-stats</module>
+		<module>ewm-main</module>
 	</modules>
 
 	<name>Explore With Me</name>
