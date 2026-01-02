@@ -1,6 +1,6 @@
-version: '3.8'
+
 services:
-  # Stats (из Этапа 1, с фиксами)
+
   stats-db:
     image: postgres:15-alpine
     container_name: stats-db
@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: stats
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stats -d ewm_stats"]
-      interval: 10s  # Фикс: 10s вместо 5s
+      interval: 10s
       timeout: 5s
       retries: 5
     volumes:
@@ -35,7 +35,6 @@ services:
     volumes:
       - stats-server:/app
 
-  # Main (Этап 2)
   main-db:
     image: postgres:15-alpine
     container_name: main-db
