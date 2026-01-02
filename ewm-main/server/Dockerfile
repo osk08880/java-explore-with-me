@@ -5,7 +5,7 @@ LABEL maintainer="your-email@example.com"
 LABEL description="EWM Main Server"
 
 # Аргумент для версии JAR (по умолчанию SNAPSHOT)
-ARG JAR_FILE=ewm-main-server-0.0.1-SNAPSHOT.jar  # Фикс: Точное имя (обнови при релизе)
+ARG JAR_FILE=ewm-main-server-0.0.1-SNAPSHOT.jar
 
 # Рабочая директория
 WORKDIR /app
