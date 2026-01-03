@@ -307,7 +307,7 @@ public class EventService {
         if (confirmedStr != null) {
             try {
                 return Long.parseLong(confirmedStr);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) { }
         }
         return requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
     }
