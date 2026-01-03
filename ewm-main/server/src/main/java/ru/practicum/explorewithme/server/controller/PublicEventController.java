@@ -27,12 +27,15 @@ public class PublicEventController {
                                       @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeEnd,
                                       @RequestParam(defaultValue = "false") Boolean onlyAvailable,
                                       @RequestParam(required = false) String sort,
-                                      @RequestParam(defaultValue = "0") Integer from,
-                                      @RequestParam(defaultValue = "10") Integer size,
+                                      @RequestParam(required = false) Integer from,
+                                      @RequestParam(required = false) Integer size,
                                       HttpServletRequest request) {
+
+        int safeFrom = (from == null) ? 0 : from;
+        int safeSize = (size == null) ? 10 : size;
+
         String remoteAddr = request.getRemoteAddr();
-        List<EventShortDto> events = eventService.getPublicEvents(text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size, remoteAddr);
-        return events;
+        return eventService.getPublicEvents(text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, safeFrom, safeSize, remoteAddr);
     }
 
     @GetMapping("/{id}")

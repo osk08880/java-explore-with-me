@@ -1,5 +1,6 @@
 package ru.practicum.explorewithme.server.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -7,9 +8,11 @@ import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -124,6 +127,46 @@ public class GlobalExceptionHandler {
                 .message("Failed to convert value: " + e.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingRequestParam(MissingServletRequestParameterException e) {
+        log.warn("BAD_REQUEST missing request param: {}", e.getParameterName());
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST.name())
+                .reason("Required request parameter is missing.")
+                .message("Parameter '" + e.getParameterName() + "' is required")
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleHttpMessageNotReadable(HttpMessageNotReadableException e) {
+        log.warn("BAD_REQUEST JSON parse error", e);
+
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST.name())
+                .reason("Incorrectly made request.")
+                .message("Invalid request body")
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(InvalidFormatException.class)
+    public ResponseEntity<ApiError> handleInvalidFormat(InvalidFormatException e) {
+        log.warn("BAD_REQUEST invalid format", e);
+
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST.name())
+                .reason("Incorrectly made request.")
+                .message("Invalid format of request field")
+                .timestamp(LocalDateTime.now())
+                .build();
+
         return ResponseEntity.badRequest().body(error);
     }
 

@@ -22,9 +22,13 @@ public class PrivateEventController {
 
     @GetMapping
     public List<EventShortDto> getAll(@PathVariable Long userId,
-                                      @RequestParam(defaultValue = "0") Integer from,
-                                      @RequestParam(defaultValue = "10") Integer size) {
-        return eventService.getUserEvents(userId, from, size);
+                                      @RequestParam(required = false) Integer from,
+                                      @RequestParam(required = false) Integer size) {
+
+        int safeFrom = (from == null) ? 0 : from;
+        int safeSize = (size == null) ? 10 : size;
+
+        return eventService.getUserEvents(userId, safeFrom, safeSize);
     }
 
     @PostMapping

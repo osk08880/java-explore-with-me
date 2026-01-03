@@ -2,6 +2,8 @@ package ru.practicum.explorewithme.server.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.explorewithme.request.dto.EventRequestStatusUpdateRequest;
@@ -19,34 +21,36 @@ public class PrivateRequestController {
 
     private final RequestService requestService;
 
-    /** Получение всех заявок текущего пользователя */
     @GetMapping
     public List<ParticipationRequestDto> getAll(@PathVariable Long userId) {
         return requestService.getByUser(userId);
     }
 
-    /** Создание новой заявки на событие */
     @PostMapping
-    public ParticipationRequestDto create(@PathVariable Long userId,
-                                          @RequestParam Long eventId) {
-        return requestService.create(userId, eventId);
+    public ResponseEntity<ParticipationRequestDto> create(
+            @PathVariable Long userId,
+            @RequestParam(required = false) Long eventId) {
+
+        if (eventId == null) {
+            throw new IllegalArgumentException("Parameter 'eventId' is required");
+        }
+
+        ParticipationRequestDto dto = requestService.create(userId, eventId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 
-    /** Отмена заявки пользователя */
     @PatchMapping("/{requestId}/cancel")
     public ParticipationRequestDto cancel(@PathVariable Long userId,
                                           @PathVariable Long requestId) {
         return requestService.cancel(userId, requestId);
     }
 
-    /** Получение заявок на конкретное событие текущего пользователя */
     @GetMapping("/events/{eventId}")
     public List<ParticipationRequestDto> getByEvent(@PathVariable Long userId,
                                                     @PathVariable Long eventId) {
         return requestService.getByEvent(userId, eventId);
     }
 
-    /** Изменение статуса заявок на событие (подтвердить / отклонить) */
     @PatchMapping("/events/{eventId}/requests")
     public EventRequestStatusUpdateResult changeStatus(@PathVariable Long userId,
                                                        @PathVariable Long eventId,

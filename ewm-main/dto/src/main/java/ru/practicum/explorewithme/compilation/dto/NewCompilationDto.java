@@ -1,5 +1,6 @@
 package ru.practicum.explorewithme.compilation.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,5 +16,6 @@ public class NewCompilationDto {
 
     private Boolean pinned;
 
+    @NotBlank
     private String title;
 }

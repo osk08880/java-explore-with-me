@@ -56,18 +56,26 @@ public class RequestService {
 
         Long confirmedCount = getConfirmedCount(eventId);
         if (event.getParticipantLimit() > 0 && confirmedCount >= event.getParticipantLimit()) {
-            throw new IllegalArgumentException(LIMIT_REACHED);
+            throw new IllegalArgumentException("Participant limit reached");
+        }
+
+        RequestStatus status;
+        if (event.getParticipantLimit() == 0) {
+            status = RequestStatus.CONFIRMED;
+        } else {
+            status = event.getRequestModeration() ? RequestStatus.PENDING : RequestStatus.CONFIRMED;
         }
 
         Request request = Request.builder()
                 .event(event)
                 .requester(userService.getById(userId))
-                .status(event.getRequestModeration() ? RequestStatus.PENDING : RequestStatus.CONFIRMED)
+                .status(status)
                 .created(LocalDateTime.now())
                 .build();
 
         request = requestRepository.save(request);
         entityManager.flush();
+
         return toDto(request);
     }
 
