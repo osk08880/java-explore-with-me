@@ -1,5 +1,6 @@
 package ru.practicum.explorewithme.compilation.dto;
 
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,5 +15,6 @@ public class UpdateCompilationRequest {
 
     private Boolean pinned;
 
+    @Size(max = 50, message = "Длина заголовка подборки не может превышать 50 символов")
     private String title;
 }

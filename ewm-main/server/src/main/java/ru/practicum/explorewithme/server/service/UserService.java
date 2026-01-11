@@ -27,13 +27,13 @@ public class UserService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private static final String USER_NOT_FOUND = "User with id=%d was not found";
+    private static final String USER_NOT_FOUND = "Пользователь с id=%d не найден";
 
     @Transactional
     public UserDto create(NewUserRequest newUser) {
         log.info("Создание пользователя с email '{}'", newUser.getEmail());
         if (userRepository.existsByEmail(newUser.getEmail())) {
-            throw new IllegalStateException("Email already exists: " + newUser.getEmail());
+            throw new IllegalStateException("Email уже существует: " + newUser.getEmail());
         }
         User user = User.builder()
                 .email(newUser.getEmail())
@@ -73,13 +73,12 @@ public class UserService {
 
         if (hasEvents) {
             log.warn("Нельзя удалить пользователя ID {} — есть связанные события", userId);
-            throw new EntityNotFoundException(String.format(USER_NOT_FOUND, userId));
+            throw new IllegalStateException("Нельзя удалить пользователя с связанными событиями");
         }
 
         userRepository.delete(user);
         log.info("Пользователь ID {} удален", userId);
     }
-
 
     @Transactional(readOnly = true)
     public User getById(Long userId) {

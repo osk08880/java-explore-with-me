@@ -50,6 +50,7 @@ public class EventService {
         }
 
         Category category = categoryService.getEntityById(newEvent.getCategory());
+
         EventLocation locationEntity = convertToEntity(newEvent.getLocation());
 
         Event event = Event.builder()
@@ -113,7 +114,7 @@ public class EventService {
 
         if (update.getEventDate() != null &&
                 update.getEventDate().isBefore(LocalDateTime.now().plusHours(ADMIN_HOURS_AHEAD))) {
-            throw new IllegalArgumentException("Дата события должна быть не менее чем через 1 час для админа");
+            throw new IllegalArgumentException("Дата события должна быть не менее чем через 1 час");
         }
 
         if (update.getStateAction() != null) {
@@ -160,7 +161,16 @@ public class EventService {
 
     public List<EventFullDto> getAdminEvents(List<Long> users, List<EventState> states, List<Long> categories,
                                              LocalDateTime rangeStart, LocalDateTime rangeEnd, Integer from, Integer size) {
-        PageRequest pageable = PageRequest.of(from / size, size, Sort.by("eventDate").descending());
+        if (rangeStart == null) {
+            rangeStart = LocalDateTime.of(1900, 1, 1, 0, 0);
+        }
+        if (rangeEnd == null) {
+            rangeEnd = LocalDateTime.now().plusYears(10);
+        }
+
+        Sort sortBy = Sort.by("eventDate").descending().and(Sort.by("id").ascending());
+        PageRequest pageable = PageRequest.of(from / size, size, sortBy);
+
         List<Event> events = eventRepository.findAdminEvents(users, states, categories, rangeStart, rangeEnd, pageable);
         return events.stream().map(e -> toFullDto(e, false)).collect(Collectors.toList());
     }
@@ -171,8 +181,8 @@ public class EventService {
         int safeFrom = from != null ? from : 0;
         int safeSize = size != null ? size : 10;
 
-        PageRequest pageable = PageRequest.of(0, safeFrom + safeSize,
-                "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending());
+        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
         LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
@@ -204,7 +214,7 @@ public class EventService {
         if (event.getState() != EventState.PUBLISHED) {
             throw new EntityNotFoundException("Событие не опубликовано");
         }
-        EventFullDto dto = toFullDto(event, false);
+
         EndpointHit hit = EndpointHit.builder()
                 .app(APP_NAME)
                 .uri(EVENTS_URI + "/" + eventId)
@@ -212,6 +222,9 @@ public class EventService {
                 .timestamp(LocalDateTime.now())
                 .build();
         statClient.postHit(hit);
+
+        EventFullDto dto = toFullDto(event, false);
+        log.info("Event {} views after hit: {}", eventId, dto.getViews());
         return dto;
     }
 
@@ -303,12 +316,6 @@ public class EventService {
     }
 
     private Long getConfirmedCount(Long eventId) {
-        String confirmedStr = System.getProperty("postman.confirmedRequests");
-        if (confirmedStr != null) {
-            try {
-                return Long.parseLong(confirmedStr);
-            } catch (NumberFormatException ignored) { }
-        }
         return requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
     }
 

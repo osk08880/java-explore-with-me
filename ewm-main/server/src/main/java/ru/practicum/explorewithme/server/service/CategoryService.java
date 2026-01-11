@@ -27,8 +27,8 @@ public class CategoryService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private static final String CATEGORY_NOT_FOUND = "Category with id=%d was not found";
-    private static final String CATEGORY_NAME_EXISTS = "Category name already exists: %s";
+    private static final String CATEGORY_NOT_FOUND = "Категория с id=%d не найдена";
+    private static final String CATEGORY_NAME_EXISTS = "Название категории уже существует: %s";
 
     @Transactional
     public CategoryDto create(NewCategoryDto newCategory) {
@@ -76,13 +76,12 @@ public class CategoryService {
         }
 
         if (eventRepository.existsByCategoryId(catId)) {
-            throw new IllegalStateException("The category is not empty");
+            throw new IllegalStateException("Категория не пустая");
         }
 
         categoryRepository.deleteById(catId);
         log.info("Категория ID {} удалена", catId);
     }
-
 
     @Transactional(readOnly = true)
     public List<CategoryDto> getAll(Integer from, Integer size) {

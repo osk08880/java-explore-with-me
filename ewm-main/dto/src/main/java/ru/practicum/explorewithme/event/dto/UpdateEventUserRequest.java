@@ -15,15 +15,15 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UpdateEventUserRequest {
 
-    @Size(max = 2000, message = "Annotation cannot exceed 2000 characters")
+    @Size(min = 20, max = 2000, message = "Длина аннотации должна быть от 20 до 2000 символов")
     private String annotation;
 
     private Long category;
 
-    @Size(max = 7000, message = "Description cannot exceed 7000 characters")
+    @Size(min = 20, max = 7000, message = "Длина описания должна быть от 20 до 7000 символов")
     private String description;
 
-    @Future(message = "Event date must be in the future")
+    @Future(message = "Дата события должна быть не в прошлом")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime eventDate;
 
@@ -31,12 +31,12 @@ public class UpdateEventUserRequest {
 
     private Boolean paid;
 
-    @Min(value = 0, message = "Participant limit cannot be negative")
+    @Min(value = 0, message = "Лимит участников не может быть отрицательным")
     private Integer participantLimit;
 
     private Boolean requestModeration;
 
-    @Size(max = 120, message = "Title cannot exceed 120 characters")
+    @Size(min = 3, max = 120, message = "Длина заголовка должна быть от 3 до 120 символов")
     private String title;
 
     private String stateAction;

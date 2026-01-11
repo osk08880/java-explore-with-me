@@ -14,6 +14,8 @@ import ru.practicum.explorewithme.compilation.dto.UpdateCompilationRequest;
 import ru.practicum.explorewithme.server.repository.CompilationRepository;
 import ru.practicum.explorewithme.server.entity.Compilation;
 import ru.practicum.explorewithme.server.entity.Event;
+import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
+
 
 import java.util.HashSet;
 import java.util.List;
@@ -29,12 +31,16 @@ public class CompilationService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private static final String COMPILATION_NOT_FOUND = "Подборка не найдена";
+    private static final String COMPILATION_NOT_FOUND = "Подборка с id=%d не найдена";
+    private static final String COMPILATION_TITLE_EXISTS = "Название подборки уже существует: %s";
     private static final boolean DEFAULT_PINNED = false;
 
     @Transactional
     public CompilationDto create(NewCompilationDto newCompilation) {
         log.info("Создание подборки с заголовком '{}'", newCompilation.getTitle());
+        if (compilationRepository.existsByTitle(newCompilation.getTitle())) {
+            throw new IllegalStateException(String.format(COMPILATION_TITLE_EXISTS, newCompilation.getTitle()));
+        }
         Compilation compilation = Compilation.builder()
                 .title(newCompilation.getTitle())
                 .pinned(newCompilation.getPinned() != null ? newCompilation.getPinned() : DEFAULT_PINNED)
@@ -53,8 +59,13 @@ public class CompilationService {
     public CompilationDto update(Long compId, UpdateCompilationRequest update) {
         log.info("Обновление подборки ID {}", compId);
         Compilation compilation = compilationRepository.findById(compId)
-                .orElseThrow(() -> new IllegalArgumentException(COMPILATION_NOT_FOUND));
-        if (update.getTitle() != null) compilation.setTitle(update.getTitle());
+                .orElseThrow(() -> new EntityNotFoundException(String.format(COMPILATION_NOT_FOUND, compId)));
+        if (update.getTitle() != null) {
+            if (compilationRepository.existsByTitleAndIdNot(update.getTitle(), compId)) {
+                throw new IllegalStateException(String.format(COMPILATION_TITLE_EXISTS, update.getTitle()));
+            }
+            compilation.setTitle(update.getTitle());
+        }
         if (update.getPinned() != null) compilation.setPinned(update.getPinned());
         Set<Event> events = new HashSet<>();
         if (update.getEvents() != null && !update.getEvents().isEmpty()) {
@@ -68,6 +79,9 @@ public class CompilationService {
 
     public void delete(Long compId) {
         log.info("Удаление подборки ID {}", compId);
+        if (!compilationRepository.existsById(compId)) {
+            throw new EntityNotFoundException(String.format(COMPILATION_NOT_FOUND, compId));
+        }
         compilationRepository.deleteById(compId);
         log.info("Подборка ID {} удалена", compId);
     }
@@ -90,14 +104,14 @@ public class CompilationService {
     public CompilationDto getById(Long compId) {
         log.debug("Получение подборки ID {}", compId);
         Compilation compilation = compilationRepository.findById(compId)
-                .orElseThrow(() -> new IllegalArgumentException(COMPILATION_NOT_FOUND));
+                .orElseThrow(() -> new EntityNotFoundException(String.format(COMPILATION_NOT_FOUND, compId)));  // 404
         return toDto(compilation);
     }
 
     private CompilationDto toDto(Compilation compilation) {
         return CompilationDto.builder()
                 .id(compilation.getId())
-                .events(compilation.getEvents().stream().map(eventService::toShortDto).collect(Collectors.toList()))
+                .events(compilation.getEvents() != null ? compilation.getEvents().stream().map(eventService::toShortDto).collect(Collectors.toList()) : List.of())
                 .pinned(compilation.getPinned())
                 .title(compilation.getTitle())
                 .build();
