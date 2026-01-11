@@ -176,16 +176,18 @@ public class EventService {
     }
 
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
-                                               LocalDateTime rangeStart, LocalDateTime rangeEnd, Boolean onlyAvailable,
-                                               String sort, Integer from, Integer size, String remoteAddr) {
+                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                               Boolean onlyAvailable, String sort, Integer from,
+                                               Integer size, String remoteAddr) {
         int safeFrom = from != null ? from : 0;
         int safeSize = size != null ? size : 10;
 
-        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        Sort sortBy = "VIEWS".equalsIgnoreCase(sort) ? Sort.by("views").descending()
+                : Sort.by("eventDate").descending();
         PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
-        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
+        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(100);
 
         List<Event> events = eventRepository.findPublicEvents(
                 text,
