@@ -210,7 +210,9 @@ public class EventService {
     }
 
     public EventFullDto getPublicEvent(Long eventId, String remoteAddr) {
+
         Event event = getById(eventId);
+
         if (event.getState() != EventState.PUBLISHED) {
             throw new EntityNotFoundException("Событие не опубликовано");
         }
@@ -221,12 +223,22 @@ public class EventService {
                 .ip(remoteAddr)
                 .timestamp(LocalDateTime.now())
                 .build();
+
         statClient.postHit(hit);
 
+        Long views = getViewsForEvent(eventId);
+
+        views = (views != null ? views : 0) + 1;
+
         EventFullDto dto = toFullDto(event, false);
-        log.info("Event {} views after hit: {}", eventId, dto.getViews());
+
+        dto.setViews(views);
+
+        log.info("Event {} views after hit from {}: {}", eventId, remoteAddr, dto.getViews());
+
         return dto;
     }
+
 
     public EventFullDto getUserEvent(Long userId, Long eventId) {
         Event event = getById(eventId);

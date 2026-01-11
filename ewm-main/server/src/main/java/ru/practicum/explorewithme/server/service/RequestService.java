@@ -41,6 +41,7 @@ public class RequestService {
     private static final String LIMIT_REACHED = "The participation limit has been reached";
     private static final String ALREADY_REQUESTED = "Already requested participation in this event";
     private static final String CANNOT_CANCEL_CONFIRMED = "Only pending or rejected requests can be canceled";
+    private static final String CANNOT_MODIFY_NON_PENDING = "Request must have status PENDING";
 
     @Transactional
     public ParticipationRequestDto create(Long userId, Long eventId) {
@@ -150,7 +151,11 @@ public class RequestService {
     }
 
     @Transactional
-    public EventRequestStatusUpdateResult changeStatus(Long userId, Long eventId, EventRequestStatusUpdateRequest update) {
+    public EventRequestStatusUpdateResult changeStatus(
+            Long userId,
+            Long eventId,
+            EventRequestStatusUpdateRequest update
+    ) {
         log.info("Попытка изменения статусов запросов: инициатор ID={}, событие ID={}, новый статус={}, запросов={}",
                 userId, eventId, update.getStatus(), update.getRequestIds().size());
 
@@ -166,22 +171,35 @@ public class RequestService {
 
         List<Request> requests = update.getRequestIds().stream()
                 .map(id -> requestRepository.findById(id)
-                        .orElseThrow(() -> new EntityNotFoundException(String.format(REQUEST_NOT_FOUND, id))))
-                .filter(r -> r.getStatus() == RequestStatus.PENDING)
+                        .orElseThrow(() -> new EntityNotFoundException(
+                                String.format(REQUEST_NOT_FOUND, id))))
                 .collect(Collectors.toList());
 
+        boolean hasNotPending = requests.stream()
+                .anyMatch(r -> r.getStatus() != RequestStatus.PENDING);
+
+        if (hasNotPending) {
+            log.warn("Конфликт: попытка изменить заявку не в статусе PENDING для события ID={}", eventId);
+            throw new ConflictException(CANNOT_MODIFY_NON_PENDING);
+        }
+
         Long confirmedCount = getConfirmedCount(eventId);
-        if ("CONFIRMED".equals(update.getStatus()) && event.getParticipantLimit() > 0
-                && confirmedCount + requests.size() > event.getParticipantLimit()) {
-            log.warn("Конфликт: превышен лимит при подтверждении для события ID={}: текущий={}, запрашиваемый={}, лимит={}",
-                    eventId, confirmedCount, requests.size(), event.getParticipantLimit());
+
+        if ("CONFIRMED".equals(update.getStatus())
+                && event.getParticipantLimit() > 0
+                && confirmedCount >= event.getParticipantLimit()) {
+            log.warn("Конфликт: лимит участников уже достигнут для события ID={}", eventId);
             throw new ConflictException(LIMIT_REACHED);
         }
+
+        List<Request> pendingRequests = requests.stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING)
+                .collect(Collectors.toList());
 
         List<Request> confirmed = new ArrayList<>();
         List<Request> rejected = new ArrayList<>();
 
-        for (Request r : requests) {
+        for (Request r : pendingRequests) {
             if ("CONFIRMED".equals(update.getStatus())) {
                 r.setStatus(RequestStatus.CONFIRMED);
                 confirmed.add(r);
@@ -191,27 +209,41 @@ public class RequestService {
             }
         }
 
-        requestRepository.saveAll(requests);
+        requestRepository.saveAll(pendingRequests);
         entityManager.flush();
 
         List<ParticipationRequestDto> additionalRejected = new ArrayList<>();
-        if ("CONFIRMED".equals(update.getStatus()) && event.getParticipantLimit() > 0
+        if ("CONFIRMED".equals(update.getStatus())
+                && event.getParticipantLimit() > 0
                 && confirmedCount + confirmed.size() >= event.getParticipantLimit()) {
-            List<Request> remainingPending = requestRepository.findAllByEventIdAndStatus(eventId, RequestStatus.PENDING);
+
+            List<Request> remainingPending = requestRepository
+                    .findAllByEventIdAndStatus(eventId, RequestStatus.PENDING);
+
             remainingPending.forEach(r -> r.setStatus(RequestStatus.REJECTED));
             requestRepository.saveAll(remainingPending);
             entityManager.flush();
-            additionalRejected = remainingPending.stream().map(this::toDto).collect(Collectors.toList());
-            log.info("Автоматически отклонено {} дополнительных запросов из-за лимита для события ID={}",
+
+            additionalRejected = remainingPending.stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+
+            log.info("Автоматически отклонено {} дополнительных запросов для события ID={}",
                     additionalRejected.size(), eventId);
         }
 
-        List<ParticipationRequestDto> confirmedDtos = confirmed.stream().map(this::toDto).collect(Collectors.toList());
-        List<ParticipationRequestDto> rejectedDtos = rejected.stream().map(this::toDto).collect(Collectors.toList());
+        List<ParticipationRequestDto> confirmedDtos = confirmed.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+
+        List<ParticipationRequestDto> rejectedDtos = rejected.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+
         rejectedDtos.addAll(additionalRejected);
 
-        log.info("Успешно обновлены статусы: подтверждено={}, отклонено={} (включая дополнительные={}) для события ID={}",
-                confirmedDtos.size(), rejectedDtos.size() - additionalRejected.size(), additionalRejected.size(), eventId);
+        log.info("Успешно обновлены статусы: подтверждено={}, отклонено={} для события ID={}",
+                confirmedDtos.size(), rejectedDtos.size(), eventId);
 
         return EventRequestStatusUpdateResult.builder()
                 .confirmedRequests(confirmedDtos)

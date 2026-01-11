@@ -9,7 +9,11 @@ import ru.practicum.explorewithme.event.dto.EventFullDto;
 import ru.practicum.explorewithme.event.dto.EventShortDto;
 import ru.practicum.explorewithme.event.dto.NewEventDto;
 import ru.practicum.explorewithme.event.dto.UpdateEventUserRequest;
+import ru.practicum.explorewithme.request.dto.EventRequestStatusUpdateRequest;
+import ru.practicum.explorewithme.request.dto.EventRequestStatusUpdateResult;
+import ru.practicum.explorewithme.request.dto.ParticipationRequestDto;
 import ru.practicum.explorewithme.server.service.EventService;
+import ru.practicum.explorewithme.server.service.RequestService;
 
 import java.util.List;
 
@@ -19,6 +23,7 @@ import java.util.List;
 @Validated
 public class PrivateEventController {
     private final EventService eventService;
+    private final RequestService requestService;
 
     @GetMapping
     public List<EventShortDto> getAll(@PathVariable Long userId,
@@ -45,5 +50,22 @@ public class PrivateEventController {
     @PatchMapping("/{eventId}")
     public EventFullDto update(@PathVariable Long userId, @PathVariable Long eventId, @Valid @RequestBody UpdateEventUserRequest update) {
         return eventService.updateUser(userId, eventId, update);
+    }
+
+    @GetMapping("/{eventId}/requests")
+    public List<ParticipationRequestDto> getEventRequests(
+            @PathVariable Long userId,
+            @PathVariable Long eventId
+    ) {
+        return requestService.getByEvent(userId, eventId);
+    }
+
+    @PatchMapping("/{eventId}/requests")
+    public EventRequestStatusUpdateResult changeRequestStatus(
+            @PathVariable Long userId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody EventRequestStatusUpdateRequest update
+    ) {
+        return requestService.changeStatus(userId, eventId, update);
     }
 }
