@@ -178,27 +178,32 @@ public class EventService {
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd, Boolean onlyAvailable,
                                                String sort, Integer from, Integer size, String remoteAddr) {
+        int safeFrom = from != null ? from : 0;
+        int safeSize = size != null ? size : 10;
 
-        int safeFrom = (from != null && from >= 0) ? from : 0;
-        int safeSize = (size != null && size > 0) ? size : 10;
+        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
 
-        Sort sortBy = "VIEWS".equalsIgnoreCase(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
+        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
 
-        int page = safeFrom / safeSize;
-        PageRequest pageable = PageRequest.of(page, safeSize, sortBy);
+        List<Event> events = eventRepository.findPublicEvents(
+                text,
+                categories,
+                paid,
+                start,
+                end,
+                onlyAvailable,
+                EventState.PUBLISHED,
+                pageable
+        );
 
-        LocalDateTime start = (rangeStart != null) ? rangeStart : LocalDateTime.now();
-        LocalDateTime end = (rangeEnd != null) ? rangeEnd : LocalDateTime.now().plusYears(1);
-
-        List<Event> events = eventRepository.findPublicEvents(text, categories, paid, start, end, onlyAvailable, pageable);
-
-        int startIndex = safeFrom % safeSize;
-        int endIndex = Math.min(events.size(), startIndex + safeSize);
-        if (startIndex >= endIndex) {
+        int endIndex = Math.min(events.size(), safeFrom + safeSize);
+        if (safeFrom >= endIndex) {
             return List.of();
         }
 
-        List<EventShortDto> shortDtos = events.subList(startIndex, endIndex).stream()
+        List<EventShortDto> shortDtos = events.subList(safeFrom, endIndex).stream()
                 .map(this::toShortDto)
                 .collect(Collectors.toList());
 

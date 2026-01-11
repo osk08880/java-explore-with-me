@@ -36,7 +36,7 @@ public class PublicEventController {
             HttpServletRequest request) {
 
         if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
-            throw new IllegalArgumentException("дата начала должна быть раньше даты окончания");
+            throw new IllegalArgumentException("rangeStart must be before rangeEnd");
         }
 
         return eventService.getPublicEvents(

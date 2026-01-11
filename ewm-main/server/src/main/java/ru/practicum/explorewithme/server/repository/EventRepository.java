@@ -17,19 +17,28 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     List<Event> findAllByIdIn(List<Long> ids, Pageable pageable);
 
-    @Query("SELECT e FROM Event e WHERE (:text IS NULL OR LOWER(e.annotation) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(e.description) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(e.title) LIKE LOWER(CONCAT('%', :text, '%'))) " +
-            "AND (:categories IS NULL OR e.category.id IN :categories) " +
-            "AND e.state = 'PUBLISHED' " +
-            "AND (:paid IS NULL OR e.paid = :paid) " +
-            "AND e.eventDate BETWEEN :rangeStart AND :rangeEnd " +
-            "AND (:onlyAvailable IS NULL OR e.participantLimit = 0 OR e.participantLimit > (SELECT COUNT(r) FROM Request r WHERE r.event = e AND r.status = 'CONFIRMED'))")
-    List<Event> findPublicEvents(@Param("text") String text,
-                                 @Param("categories") List<Long> categories,
-                                 @Param("paid") Boolean paid,
-                                 @Param("rangeStart") LocalDateTime rangeStart,
-                                 @Param("rangeEnd") LocalDateTime rangeEnd,
-                                 @Param("onlyAvailable") Boolean onlyAvailable,
-                                 Pageable pageable);
+    @Query("""
+        SELECT e FROM Event e
+        WHERE (:text IS NULL 
+               OR LOWER(e.annotation) LIKE LOWER(CONCAT('%', :text, '%')) 
+               OR LOWER(e.description) LIKE LOWER(CONCAT('%', :text, '%'))
+               OR LOWER(e.title) LIKE LOWER(CONCAT('%', :text, '%')))
+          AND (:categories IS NULL OR e.category.id IN :categories)
+          AND e.state = :publishedState
+          AND (:paid IS NULL OR e.paid = :paid)
+          AND e.eventDate BETWEEN :rangeStart AND :rangeEnd
+          AND (:onlyAvailable IS NULL OR e.participantLimit = 0 
+               OR e.participantLimit > (SELECT COUNT(r) FROM Request r WHERE r.event = e AND r.status = ru.practicum.explorewithme.server.entity.RequestStatus.CONFIRMED))
+    """)
+    List<Event> findPublicEvents(
+            @Param("text") String text,
+            @Param("categories") List<Long> categories,
+            @Param("paid") Boolean paid,
+            @Param("rangeStart") LocalDateTime rangeStart,
+            @Param("rangeEnd") LocalDateTime rangeEnd,
+            @Param("onlyAvailable") Boolean onlyAvailable,
+            @Param("publishedState") EventState publishedState,
+            Pageable pageable);
 
     @Query("SELECT e FROM Event e WHERE (:users IS NULL OR e.initiator.id IN :users) " +
             "AND (:states IS NULL OR e.state IN :states) " +
