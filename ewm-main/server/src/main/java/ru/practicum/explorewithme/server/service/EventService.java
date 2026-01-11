@@ -182,9 +182,8 @@ public class EventService {
         int safeFrom = from != null ? from : 0;
         int safeSize = size != null ? size : 10;
 
-        Sort sortBy = "VIEWS".equalsIgnoreCase(sort) ? Sort.by("views").descending()
-                : Sort.by("eventDate").descending();
-        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
+        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize,
+                Sort.by("eventDate").descending());
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
         LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(100);
@@ -200,6 +199,10 @@ public class EventService {
                 pageable
         );
 
+        if ("VIEWS".equalsIgnoreCase(sort)) {
+            events.sort((e1, e2) -> Long.compare(getViewsForEvent(e2.getId()), getViewsForEvent(e1.getId())));
+        }
+
         int endIndex = Math.min(events.size(), safeFrom + safeSize);
         if (safeFrom >= endIndex) {
             return List.of();
@@ -209,13 +212,15 @@ public class EventService {
                 .map(this::toShortDto)
                 .collect(Collectors.toList());
 
-        EndpointHit hit = EndpointHit.builder()
-                .app(APP_NAME)
-                .uri(EVENTS_URI)
-                .ip(remoteAddr)
-                .timestamp(LocalDateTime.now())
-                .build();
-        statClient.postHit(hit);
+        if (remoteAddr != null && !remoteAddr.isEmpty()) {
+            EndpointHit hit = EndpointHit.builder()
+                    .app(APP_NAME)
+                    .uri(EVENTS_URI)
+                    .ip(remoteAddr)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            statClient.postHit(hit);
+        }
 
         return shortDtos;
     }
