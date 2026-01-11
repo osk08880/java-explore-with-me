@@ -17,6 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Validated
 public class PublicEventController {
+
     private final EventService eventService;
 
     @GetMapping
@@ -33,6 +34,10 @@ public class PublicEventController {
             @RequestParam(defaultValue = "0") Integer from,
             @RequestParam(defaultValue = "10") Integer size,
             HttpServletRequest request) {
+
+        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
+            throw new IllegalArgumentException("дата начала должна быть раньше даты окончания");
+        }
 
         return eventService.getPublicEvents(
                 text,
