@@ -34,10 +34,6 @@ public class PublicEventController {
             @RequestParam(defaultValue = "10") Integer size,
             HttpServletRequest request) {
 
-        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
-            throw new IllegalArgumentException("rangeStart must be before rangeEnd");
-        }
-
         return eventService.getPublicEvents(
                 text,
                 categories,
@@ -52,11 +48,9 @@ public class PublicEventController {
         );
     }
 
-
     @GetMapping("/{id}")
     public EventFullDto getById(@PathVariable Long id, HttpServletRequest request) {
         String remoteAddr = request.getRemoteAddr();
-        EventFullDto dto = eventService.getPublicEvent(id, remoteAddr);
-        return dto;
+        return eventService.getPublicEvent(id, remoteAddr);
     }
 }

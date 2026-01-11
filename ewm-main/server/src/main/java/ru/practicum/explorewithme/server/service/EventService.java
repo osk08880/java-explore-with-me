@@ -178,14 +178,19 @@ public class EventService {
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd, Boolean onlyAvailable,
                                                String sort, Integer from, Integer size, String remoteAddr) {
+
         int safeFrom = from != null ? from : 0;
         int safeSize = size != null ? size : 10;
 
-        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        Sort sortBy = "VIEWS".equalsIgnoreCase(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
         PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
         LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
+
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("rangeStart must be before rangeEnd");
+        }
 
         List<Event> events = eventRepository.findPublicEvents(text, categories, paid, start, end, onlyAvailable, pageable);
 
@@ -210,7 +215,6 @@ public class EventService {
     }
 
     public EventFullDto getPublicEvent(Long eventId, String remoteAddr) {
-
         Event event = getById(eventId);
 
         if (event.getState() != EventState.PUBLISHED) {
@@ -223,15 +227,12 @@ public class EventService {
                 .ip(remoteAddr)
                 .timestamp(LocalDateTime.now())
                 .build();
-
         statClient.postHit(hit);
 
         Long views = getViewsForEvent(eventId);
-
-        views = (views != null ? views : 0) + 1;
+        views = (views != null ? views : 0L) + 1;
 
         EventFullDto dto = toFullDto(event, false);
-
         dto.setViews(views);
 
         log.info("Event {} views after hit from {}: {}", eventId, remoteAddr, dto.getViews());
