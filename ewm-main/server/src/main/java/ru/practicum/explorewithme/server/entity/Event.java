@@ -24,7 +24,7 @@ public class Event {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    @Column(nullable = false, length = 2000)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String annotation;
 
     @Column(nullable = false, columnDefinition = "TEXT")
