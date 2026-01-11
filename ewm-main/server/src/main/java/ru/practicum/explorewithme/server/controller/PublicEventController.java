@@ -30,16 +30,13 @@ public class PublicEventController {
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeEnd,
             @RequestParam(defaultValue = "false") Boolean onlyAvailable,
             @RequestParam(required = false) String sort,
-            @RequestParam(required = false) Integer from,
-            @RequestParam(required = false) Integer size,
+            @RequestParam(defaultValue = "0") Integer from,
+            @RequestParam(defaultValue = "10") Integer size,
             HttpServletRequest request) {
 
         if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
             throw new IllegalArgumentException("rangeStart must be before rangeEnd");
         }
-
-        int safeFrom = (from != null) ? from : 0;
-        int safeSize = (size != null) ? size : 10;
 
         return eventService.getPublicEvents(
                 text,
@@ -49,11 +46,12 @@ public class PublicEventController {
                 rangeEnd,
                 onlyAvailable,
                 sort,
-                safeFrom,
-                safeSize,
+                from,
+                size,
                 request.getRemoteAddr()
         );
     }
+
 
     @GetMapping("/{id}")
     public EventFullDto getById(@PathVariable Long id, HttpServletRequest request) {
