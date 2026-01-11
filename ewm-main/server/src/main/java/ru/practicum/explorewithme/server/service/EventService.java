@@ -195,7 +195,7 @@ public class EventService {
                 start,
                 end,
                 onlyAvailable,
-                EventState.PUBLISHED,
+                EventState.PUBLISHED.name(),
                 pageable
         );
 

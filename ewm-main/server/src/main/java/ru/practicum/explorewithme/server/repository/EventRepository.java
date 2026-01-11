@@ -15,19 +15,22 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     boolean existsByCategoryId(Long categoryId);
 
-    @Query("""
-SELECT e FROM Event e
+    @Query(value = """
+SELECT * FROM events e
 WHERE (:text IS NULL
-       OR LOWER(CAST(e.annotation AS text)) LIKE LOWER(CONCAT('%', :text, '%'))
-       OR LOWER(CAST(e.description AS text)) LIKE LOWER(CONCAT('%', :text, '%'))
-       OR LOWER(CAST(e.title AS text)) LIKE LOWER(CONCAT('%', :text, '%')))
-  AND (:categories IS NULL OR e.category.id IN :categories)
+       OR e.annotation ILIKE CONCAT('%', :text, '%')
+       OR e.description ILIKE CONCAT('%', :text, '%')
+       OR e.title ILIKE CONCAT('%', :text, '%'))
+  AND (:categories IS NULL OR e.category_id = ANY(:categories))
   AND e.state = :publishedState
   AND (:paid IS NULL OR e.paid = :paid)
-  AND e.eventDate BETWEEN :rangeStart AND :rangeEnd
-  AND (:onlyAvailable IS NULL OR e.participantLimit = 0
-       OR e.participantLimit > (SELECT COUNT(r) FROM Request r WHERE r.event = e AND r.status = ru.practicum.explorewithme.server.entity.RequestStatus.CONFIRMED))
-""")
+  AND e.event_date BETWEEN :rangeStart AND :rangeEnd
+  AND (:onlyAvailable IS NULL OR e.participant_limit = 0
+       OR e.participant_limit > (SELECT COUNT(r.id)
+                                 FROM requests r
+                                 WHERE r.event_id = e.id AND r.status='CONFIRMED'))
+ORDER BY e.event_date DESC
+""", nativeQuery = true)
     List<Event> findPublicEvents(
             @Param("text") String text,
             @Param("categories") List<Long> categories,
@@ -35,8 +38,9 @@ WHERE (:text IS NULL
             @Param("rangeStart") LocalDateTime rangeStart,
             @Param("rangeEnd") LocalDateTime rangeEnd,
             @Param("onlyAvailable") Boolean onlyAvailable,
-            @Param("publishedState") EventState publishedState,
-            Pageable pageable);
+            @Param("publishedState") String publishedState,
+            Pageable pageable
+    );
 
     @Query("""
         SELECT e FROM Event e
