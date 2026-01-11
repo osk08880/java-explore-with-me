@@ -15,22 +15,19 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     boolean existsByCategoryId(Long categoryId);
 
-    @Query(value = """
-SELECT * FROM events e
-WHERE (:text IS NULL
-       OR e.annotation ILIKE CONCAT('%', :text, '%')
-       OR e.description ILIKE CONCAT('%', :text, '%')
-       OR e.title ILIKE CONCAT('%', :text, '%'))
-  AND (:categories IS NULL OR e.category_id = ANY(:categories))
-  AND e.state = :publishedState
-  AND (:paid IS NULL OR e.paid = :paid)
-  AND e.event_date BETWEEN :rangeStart AND :rangeEnd
-  AND (:onlyAvailable IS NULL OR e.participant_limit = 0
-       OR e.participant_limit > (SELECT COUNT(r.id)
-                                 FROM requests r
-                                 WHERE r.event_id = e.id AND r.status='CONFIRMED'))
-ORDER BY e.event_date DESC
-""", nativeQuery = true)
+    @Query("""
+        SELECT e FROM Event e
+        WHERE (:text IS NULL
+               OR LOWER(e.annotation) LIKE LOWER(CONCAT('%', :text, '%'))
+               OR LOWER(e.description) LIKE LOWER(CONCAT('%', :text, '%'))
+               OR LOWER(e.title) LIKE LOWER(CONCAT('%', :text, '%')))
+          AND (:categories IS NULL OR e.category.id IN :categories)
+          AND e.state = :publishedState
+          AND (:paid IS NULL OR e.paid = :paid)
+          AND e.eventDate BETWEEN :rangeStart AND :rangeEnd
+          AND (:onlyAvailable IS NULL OR e.participantLimit = 0
+               OR e.participantLimit > (SELECT COUNT(r) FROM Request r WHERE r.event = e AND r.status = ru.practicum.explorewithme.server.entity.RequestStatus.CONFIRMED))
+    """)
     List<Event> findPublicEvents(
             @Param("text") String text,
             @Param("categories") List<Long> categories,
@@ -38,25 +35,19 @@ ORDER BY e.event_date DESC
             @Param("rangeStart") LocalDateTime rangeStart,
             @Param("rangeEnd") LocalDateTime rangeEnd,
             @Param("onlyAvailable") Boolean onlyAvailable,
-            @Param("publishedState") String publishedState,
-            Pageable pageable
-    );
+            @Param("publishedState") EventState publishedState,
+            Pageable pageable);
 
-    @Query("""
-        SELECT e FROM Event e
-        WHERE (:users IS NULL OR e.initiator.id IN :users)
-          AND (:states IS NULL OR e.state IN :states)
-          AND (:categories IS NULL OR e.category.id IN :categories)
-          AND e.eventDate BETWEEN :rangeStart AND :rangeEnd
-    """)
-    List<Event> findAdminEvents(
-            @Param("users") List<Long> users,
-            @Param("states") List<EventState> states,
-            @Param("categories") List<Long> categories,
-            @Param("rangeStart") LocalDateTime rangeStart,
-            @Param("rangeEnd") LocalDateTime rangeEnd,
-            Pageable pageable
-    );
+    @Query("SELECT e FROM Event e WHERE (:users IS NULL OR e.initiator.id IN :users) " +
+            "AND (:states IS NULL OR e.state IN :states) " +
+            "AND (:categories IS NULL OR e.category.id IN :categories) " +
+            "AND e.eventDate BETWEEN :rangeStart AND :rangeEnd")
+    List<Event> findAdminEvents(@Param("users") List<Long> users,
+                                @Param("states") List<EventState> states,
+                                @Param("categories") List<Long> categories,
+                                @Param("rangeStart") LocalDateTime rangeStart,
+                                @Param("rangeEnd") LocalDateTime rangeEnd,
+                                Pageable pageable);
 
     List<Event> findAllByInitiatorId(Long userId, Pageable pageable);
 

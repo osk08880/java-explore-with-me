@@ -176,17 +176,17 @@ public class EventService {
     }
 
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
-                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
-                                               Boolean onlyAvailable, String sort, Integer from,
-                                               Integer size, String remoteAddr) {
+                                               LocalDateTime rangeStart, LocalDateTime rangeEnd, Boolean onlyAvailable,
+                                               String sort, Integer from, Integer size, String remoteAddr) {
         int safeFrom = from != null ? from : 0;
         int safeSize = size != null ? size : 10;
 
-        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize,
-                Sort.by("eventDate").descending());
+        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+
+        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
-        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(100);
+        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
 
         List<Event> events = eventRepository.findPublicEvents(
                 text,
@@ -195,33 +195,24 @@ public class EventService {
                 start,
                 end,
                 onlyAvailable,
-                EventState.PUBLISHED.name(),
+                EventState.PUBLISHED,
                 pageable
         );
-
-        if ("VIEWS".equalsIgnoreCase(sort)) {
-            events.sort((e1, e2) -> Long.compare(getViewsForEvent(e2.getId()), getViewsForEvent(e1.getId())));
-        }
 
         int endIndex = Math.min(events.size(), safeFrom + safeSize);
         if (safeFrom >= endIndex) {
             return List.of();
         }
-
         List<EventShortDto> shortDtos = events.subList(safeFrom, endIndex).stream()
                 .map(this::toShortDto)
                 .collect(Collectors.toList());
-
-        if (remoteAddr != null && !remoteAddr.isEmpty()) {
-            EndpointHit hit = EndpointHit.builder()
-                    .app(APP_NAME)
-                    .uri(EVENTS_URI)
-                    .ip(remoteAddr)
-                    .timestamp(LocalDateTime.now())
-                    .build();
-            statClient.postHit(hit);
-        }
-
+        EndpointHit hit = EndpointHit.builder()
+                .app(APP_NAME)
+                .uri(EVENTS_URI)
+                .ip(remoteAddr)
+                .timestamp(LocalDateTime.now())
+                .build();
+        statClient.postHit(hit);
         return shortDtos;
     }
 
