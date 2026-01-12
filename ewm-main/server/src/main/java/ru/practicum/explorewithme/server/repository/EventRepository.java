@@ -19,25 +19,26 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("""
     SELECT e FROM Event e
     WHERE (:text IS NULL
-           OR LOWER(e.annotation) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%'))
-           OR LOWER(e.description) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%'))
-           OR LOWER(e.title) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%')))
+           OR LOWER(CAST(e.annotation AS text)) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%'))
+           OR LOWER(CAST(e.description AS text)) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%'))
+           OR LOWER(CAST(e.title AS text)) LIKE LOWER(CONCAT('%', COALESCE(:text, ''), '%')))
       AND (:categories IS NULL OR e.category.id IN :categories)
       AND e.state = :publishedState
       AND (:paid IS NULL OR e.paid = :paid)
       AND e.eventDate BETWEEN :rangeStart AND :rangeEnd
       AND (:onlyAvailable IS NULL OR e.participantLimit = 0
            OR e.participantLimit > (SELECT COUNT(r) FROM Request r WHERE r.event = e AND r.status = 'CONFIRMED'))
+    ORDER BY e.eventDate DESC
 """)
     Page<Event> findPublicEvents(
-                                   @Param("text") String text,
-                                   @Param("categories") List<Long> categories,
-                                   @Param("paid") Boolean paid,
-                                   @Param("rangeStart") LocalDateTime rangeStart,
-                                   @Param("rangeEnd") LocalDateTime rangeEnd,
-                                   @Param("onlyAvailable") Boolean onlyAvailable,
-                                   @Param("publishedState") EventState publishedState,
-                                   Pageable pageable);
+            @Param("text") String text,
+            @Param("categories") List<Long> categories,
+            @Param("paid") Boolean paid,
+            @Param("rangeStart") LocalDateTime rangeStart,
+            @Param("rangeEnd") LocalDateTime rangeEnd,
+            @Param("onlyAvailable") Boolean onlyAvailable,
+            @Param("publishedState") EventState publishedState,
+            Pageable pageable);
 
     @Query("SELECT e FROM Event e WHERE (:users IS NULL OR e.initiator.id IN :users) " +
             "AND (:states IS NULL OR e.state IN :states) " +
