@@ -36,6 +36,11 @@ public class StatsController {
                                                     @RequestParam(required = false) List<String> uris,
                                                     @RequestParam(defaultValue = "false") boolean unique) {
         log.debug("Getting stats from {} to {}, uris: {}, unique: {}", start, end, uris, unique);
+
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("Неверный диапазон дат: start не может быть после end");
+        }
+
         List<ViewStats> stats = statService.getStats(start, end, uris, unique);
         return ResponseEntity.ok(stats);
     }

@@ -4,6 +4,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -176,21 +177,22 @@ public class EventService {
     }
 
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
-                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
-                                               Boolean onlyAvailable, String sort, Integer from,
-                                               Integer size, String remoteAddr) {
-        int safeFrom = from != null ? from : 0;
-        int safeSize = size != null ? size : 10;
+                                               LocalDateTime rangeStart, LocalDateTime rangeEnd, Boolean onlyAvailable,
+                                               String sort, Integer from, Integer size, String remoteAddr) {
+        int page = from != null ? from / (size != null ? size : 10) : 0;
+        int pageSize = size != null ? size : 10;
 
-        Sort sortBy = "VIEWS".equalsIgnoreCase(sort) ? Sort.by("views").descending()
-                : Sort.by("eventDate").descending();
-        PageRequest pageable = PageRequest.of(safeFrom / safeSize, safeSize, sortBy);
+        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("eventDate").descending() : Sort.by("eventDate").descending();
+
+        PageRequest pageable = PageRequest.of(page, pageSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
-        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(100);
+        LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
 
-        List<Event> events = eventRepository.findPublicEvents(
-                text,
+        String searchText = (text == null || text.trim().isEmpty()) ? "" : text.trim();
+
+        Page<Event> eventsPage = eventRepository.findPublicEvents(
+                searchText,
                 categories,
                 paid,
                 start,
@@ -200,15 +202,20 @@ public class EventService {
                 pageable
         );
 
-        int endIndex = Math.min(events.size(), safeFrom + safeSize);
-        if (safeFrom >= endIndex) {
+        if (eventsPage.isEmpty()) {
+            sendHit(remoteAddr);
             return List.of();
         }
 
-        List<EventShortDto> shortDtos = events.subList(safeFrom, endIndex).stream()
+        List<EventShortDto> shortDtos = eventsPage.getContent().stream()
                 .map(this::toShortDto)
                 .collect(Collectors.toList());
 
+        sendHit(remoteAddr);
+        return shortDtos;
+    }
+
+    private void sendHit(String remoteAddr) {
         EndpointHit hit = EndpointHit.builder()
                 .app(APP_NAME)
                 .uri(EVENTS_URI)
@@ -216,8 +223,6 @@ public class EventService {
                 .timestamp(LocalDateTime.now())
                 .build();
         statClient.postHit(hit);
-
-        return shortDtos;
     }
 
     public EventFullDto getPublicEvent(Long eventId, String remoteAddr) {
