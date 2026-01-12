@@ -182,14 +182,17 @@ public class EventService {
         int page = from != null ? from / (size != null ? size : 10) : 0;
         int pageSize = size != null ? size : 10;
 
-        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("views").descending() : Sort.by("eventDate").descending();
+        Sort sortBy = "VIEWS".equals(sort) ? Sort.by("eventDate").descending() : Sort.by("eventDate").descending();
+
         PageRequest pageable = PageRequest.of(page, pageSize, sortBy);
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
         LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
 
+        String searchText = (text == null || text.trim().isEmpty()) ? "" : text.trim();
+
         Page<Event> eventsPage = eventRepository.findPublicEvents(
-                text,
+                searchText,
                 categories,
                 paid,
                 start,
