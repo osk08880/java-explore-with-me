@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import ru.practicum.explorewithme.stats.server.dto.ApiError;
@@ -23,6 +24,19 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
                 .message(e.getMessage())
+                .timestamp(LocalDateTime.now())
+                .errors(List.of())
+                .build();
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingRequestParam(MissingServletRequestParameterException e) {
+        log.warn("BAD_REQUEST missing request param: {}", e.getParameterName());
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST.name())
+                .reason("Required request parameter is missing.")
+                .message("Parameter '" + e.getParameterName() + "' is required")
                 .timestamp(LocalDateTime.now())
                 .errors(List.of())
                 .build();
