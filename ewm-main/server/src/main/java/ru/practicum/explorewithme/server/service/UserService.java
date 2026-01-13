@@ -10,10 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explorewithme.user.dto.NewUserRequest;
 import ru.practicum.explorewithme.user.dto.UserDto;
-import ru.practicum.explorewithme.user.dto.UserShortDto;
 import ru.practicum.explorewithme.server.repository.UserRepository;
 import ru.practicum.explorewithme.server.entity.User;
 import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
+import ru.practicum.explorewithme.server.mapper.UserMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -35,14 +37,11 @@ public class UserService {
         if (userRepository.existsByEmail(newUser.getEmail())) {
             throw new IllegalStateException("Email уже существует: " + newUser.getEmail());
         }
-        User user = User.builder()
-                .email(newUser.getEmail())
-                .name(newUser.getName())
-                .build();
+        User user = userMapper.toEntity(newUser);
         user = userRepository.save(user);
         entityManager.flush();
         log.info("Пользователь создан с ID {}", user.getId());
-        return toDto(user);
+        return userMapper.toDto(user);
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +55,9 @@ public class UserService {
             Page<User> page = userRepository.findAll(pageable);
             users = page.getContent();
         }
-        return users.stream().map(this::toDto).collect(Collectors.toList());
+        return users.stream()
+                .map(userMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -85,20 +86,5 @@ public class UserService {
         log.debug("Получение пользователя ID {}", userId);
         Optional<User> user = userRepository.findById(userId);
         return user.orElseThrow(() -> new EntityNotFoundException(String.format(USER_NOT_FOUND, userId)));
-    }
-
-    public UserDto toDto(User user) {
-        return UserDto.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .name(user.getName())
-                .build();
-    }
-
-    public UserShortDto toShortDto(User user) {
-        return UserShortDto.builder()
-                .id(user.getId())
-                .name(user.getName())
-                .build();
     }
 }

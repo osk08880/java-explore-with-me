@@ -11,11 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explorewithme.compilation.dto.CompilationDto;
 import ru.practicum.explorewithme.compilation.dto.NewCompilationDto;
 import ru.practicum.explorewithme.compilation.dto.UpdateCompilationRequest;
+import ru.practicum.explorewithme.event.dto.EventShortDto;
 import ru.practicum.explorewithme.server.repository.CompilationRepository;
 import ru.practicum.explorewithme.server.entity.Compilation;
 import ru.practicum.explorewithme.server.entity.Event;
 import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
-
+import ru.practicum.explorewithme.server.mapper.CompilationMapper;
+import ru.practicum.explorewithme.server.mapper.EventMapper;
 
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +30,9 @@ import java.util.stream.Collectors;
 public class CompilationService {
     private final CompilationRepository compilationRepository;
     private final EventService eventService;
+    private final CompilationMapper compilationMapper;
+    private final EventMapper eventMapper;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -53,7 +58,12 @@ public class CompilationService {
         compilation = compilationRepository.save(compilation);
         entityManager.flush();
         log.info("Подборка создана с ID {}", compilation.getId());
-        return toDto(compilation);
+
+        List<EventShortDto> eventDtos = events.stream()
+                .map(e -> eventMapper.toShortDto(e, eventService.getConfirmedCount(e.getId()), eventService.getViewsForEvent(e.getId())))
+                .collect(Collectors.toList());
+
+        return compilationMapper.toDto(compilation, eventDtos);
     }
 
     public CompilationDto update(Long compId, UpdateCompilationRequest update) {
@@ -74,7 +84,12 @@ public class CompilationService {
         compilation.setEvents(events);
         compilation = compilationRepository.save(compilation);
         log.info("Подборка ID {} обновлена", compId);
-        return toDto(compilation);
+
+        List<EventShortDto> eventDtos = events.stream()
+                .map(e -> eventMapper.toShortDto(e, eventService.getConfirmedCount(e.getId()), eventService.getViewsForEvent(e.getId())))
+                .collect(Collectors.toList());
+
+        return compilationMapper.toDto(compilation, eventDtos);
     }
 
     public void delete(Long compId) {
@@ -97,23 +112,27 @@ public class CompilationService {
             Page<Compilation> page = compilationRepository.findAll(pageable);
             compilations = page.getContent();
         }
-        return compilations.stream().map(this::toDto).collect(Collectors.toList());
+
+        return compilations.stream()
+                .map(comp -> {
+                    List<EventShortDto> eventDtos = comp.getEvents() != null ? comp.getEvents().stream()
+                            .map(e -> eventMapper.toShortDto(e, eventService.getConfirmedCount(e.getId()), eventService.getViewsForEvent(e.getId())))
+                            .collect(Collectors.toList()) : List.of();
+                    return compilationMapper.toDto(comp, eventDtos);
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public CompilationDto getById(Long compId) {
         log.debug("Получение подборки ID {}", compId);
         Compilation compilation = compilationRepository.findById(compId)
-                .orElseThrow(() -> new EntityNotFoundException(String.format(COMPILATION_NOT_FOUND, compId)));  // 404
-        return toDto(compilation);
-    }
+                .orElseThrow(() -> new EntityNotFoundException(String.format(COMPILATION_NOT_FOUND, compId)));
 
-    private CompilationDto toDto(Compilation compilation) {
-        return CompilationDto.builder()
-                .id(compilation.getId())
-                .events(compilation.getEvents() != null ? compilation.getEvents().stream().map(eventService::toShortDto).collect(Collectors.toList()) : List.of())
-                .pinned(compilation.getPinned())
-                .title(compilation.getTitle())
-                .build();
+        List<EventShortDto> eventDtos = compilation.getEvents() != null ? compilation.getEvents().stream()
+                .map(e -> eventMapper.toShortDto(e, eventService.getConfirmedCount(e.getId()), eventService.getViewsForEvent(e.getId())))
+                .collect(Collectors.toList()) : List.of();
+
+        return compilationMapper.toDto(compilation, eventDtos);
     }
 }

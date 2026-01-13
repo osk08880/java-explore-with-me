@@ -31,10 +31,6 @@ public class PrivateRequestController {
             @PathVariable Long userId,
             @RequestParam(required = false) Long eventId) {
 
-        if (eventId == null) {
-            throw new IllegalArgumentException("Parameter 'eventId' is required");
-        }
-
         ParticipationRequestDto dto = requestService.create(userId, eventId);
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }

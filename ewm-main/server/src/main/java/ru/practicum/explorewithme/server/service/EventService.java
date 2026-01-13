@@ -12,11 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explorewithme.event.dto.*;
 import ru.practicum.explorewithme.server.entity.*;
 import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
+import ru.practicum.explorewithme.server.mapper.EventMapper;
 import ru.practicum.explorewithme.server.repository.EventRepository;
 import ru.practicum.explorewithme.server.repository.RequestRepository;
 import ru.practicum.explorewithme.client.StatClient;
 import ru.practicum.explorewithme.stats.dto.EndpointHit;
 import ru.practicum.explorewithme.stats.dto.ViewStats;
+import ru.practicum.explorewithme.server.entity.RequestStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,6 +33,7 @@ public class EventService {
     private final CategoryService categoryService;
     private final RequestRepository requestRepository;
     private final StatClient statClient;
+    private final EventMapper eventMapper;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -73,7 +76,10 @@ public class EventService {
         entityManager.flush();
         log.info("Событие создано с ID {}", event.getId());
 
-        return toFullDto(event, true);
+        Long confirmedRequests = getConfirmedCount(event.getId());
+        Long views = getViewsForEvent(event.getId());
+
+        return eventMapper.toFullDto(event, confirmedRequests, views, true);
     }
 
     public EventFullDto updateUser(Long userId, Long eventId, UpdateEventUserRequest update) {
@@ -105,7 +111,10 @@ public class EventService {
         event = eventRepository.save(event);
         log.info("Событие пользователя {} обновлено", eventId);
 
-        return toFullDto(event, false);
+        Long confirmedRequests = getConfirmedCount(event.getId());
+        Long views = getViewsForEvent(event.getId());
+
+        return eventMapper.toFullDto(event, confirmedRequests, views, false);
     }
 
     @Transactional
@@ -140,7 +149,10 @@ public class EventService {
         event = eventRepository.save(event);
         log.info("Событие админа {} обновлено", eventId);
 
-        return toFullDto(event, false);
+        Long confirmedRequests = getConfirmedCount(event.getId());
+        Long views = getViewsForEvent(event.getId());
+
+        return eventMapper.toFullDto(event, confirmedRequests, views, false);
     }
 
     public List<EventShortDto> getUserEvents(Long userId, Integer from, Integer size) {
@@ -156,7 +168,11 @@ public class EventService {
         }
 
         return events.subList(safeFrom, endIndex).stream()
-                .map(this::toShortDto)
+                .map(e -> {
+                    Long confirmedRequests = getConfirmedCount(e.getId());
+                    Long views = getViewsForEvent(e.getId());
+                    return eventMapper.toShortDto(e, confirmedRequests, views);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -173,7 +189,13 @@ public class EventService {
         PageRequest pageable = PageRequest.of(from / size, size, sortBy);
 
         List<Event> events = eventRepository.findAdminEvents(users, states, categories, rangeStart, rangeEnd, pageable);
-        return events.stream().map(e -> toFullDto(e, false)).collect(Collectors.toList());
+        return events.stream()
+                .map(e -> {
+                    Long confirmedRequests = getConfirmedCount(e.getId());
+                    Long views = getViewsForEvent(e.getId());
+                    return eventMapper.toFullDto(e, confirmedRequests, views, false);
+                })
+                .collect(Collectors.toList());
     }
 
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
@@ -188,6 +210,11 @@ public class EventService {
 
         LocalDateTime start = rangeStart != null ? rangeStart : LocalDateTime.now();
         LocalDateTime end = rangeEnd != null ? rangeEnd : LocalDateTime.now().plusYears(1);
+
+        if (rangeStart != null && rangeEnd != null && start.isAfter(end)) {
+            log.warn("Неверный диапазон дат: rangeStart после rangeEnd");
+            throw new IllegalArgumentException("Неверный диапазон дат: rangeStart должен быть раньше rangeEnd");
+        }
 
         String searchText = (text == null || text.trim().isEmpty()) ? "" : text.trim();
 
@@ -208,7 +235,11 @@ public class EventService {
         }
 
         List<EventShortDto> shortDtos = eventsPage.getContent().stream()
-                .map(this::toShortDto)
+                .map(e -> {
+                    Long confirmedRequests = getConfirmedCount(e.getId());
+                    Long views = getViewsForEvent(e.getId());
+                    return eventMapper.toShortDto(e, confirmedRequests, views);
+                })
                 .collect(Collectors.toList());
 
         sendHit(remoteAddr);
@@ -243,21 +274,26 @@ public class EventService {
         Long views = getViewsForEvent(eventId);
         views = (views != null ? views : 0L) + 1;
 
-        EventFullDto dto = toFullDto(event, false);
+        Long confirmedRequests = getConfirmedCount(event.getId());
+
+        EventFullDto dto = eventMapper.toFullDto(event, confirmedRequests, views, false);
         dto.setViews(views);
 
-        log.info("Event {} views after hit from {}: {}", eventId, remoteAddr, dto.getViews());
+        log.info("Просмотр события {} после запроса {}: {}", eventId, remoteAddr, dto.getViews());
 
         return dto;
     }
-
 
     public EventFullDto getUserEvent(Long userId, Long eventId) {
         Event event = getById(eventId);
         if (!event.getInitiator().getId().equals(userId)) {
             throw new EntityNotFoundException("Событие недоступно для этого пользователя");
         }
-        return toFullDto(event, false);
+
+        Long confirmedRequests = getConfirmedCount(event.getId());
+        Long views = getViewsForEvent(event.getId());
+
+        return eventMapper.toFullDto(event, confirmedRequests, views, false);
     }
 
     @Transactional(readOnly = true)
@@ -295,55 +331,11 @@ public class EventService {
         return new EventLocation(dto.getLat(), dto.getLon());
     }
 
-    private Location convertToDto(EventLocation entity) {
-        if (entity == null) return null;
-        return new Location(entity.getLat(), entity.getLon());
-    }
-
-    private EventFullDto toFullDto(Event event, boolean isNew) {
-        Long confirmedRequests = getConfirmedCount(event.getId());
-        Long views = getViewsForEvent(event.getId());
-        return EventFullDto.builder()
-                .id(event.getId())
-                .annotation(event.getAnnotation())
-                .category(categoryService.toDto(event.getCategory()))
-                .confirmedRequests(confirmedRequests)
-                .createdOn(event.getCreatedOn())
-                .description(event.getDescription())
-                .eventDate(event.getEventDate())
-                .initiator(userService.toShortDto(event.getInitiator()))
-                .location(convertToDto(event.getLocation()))
-                .paid(event.getPaid())
-                .participantLimit(event.getParticipantLimit())
-                .publishedOn(event.getPublishedOn())
-                .requestModeration(event.getRequestModeration())
-                .state(event.getState().name())
-                .title(event.getTitle())
-                .views(views)
-                .build();
-    }
-
-    public EventShortDto toShortDto(Event event) {
-        Long confirmedRequests = getConfirmedCount(event.getId());
-        Long views = getViewsForEvent(event.getId());
-        return EventShortDto.builder()
-                .id(event.getId())
-                .annotation(event.getAnnotation())
-                .category(categoryService.toDto(event.getCategory()))
-                .confirmedRequests(confirmedRequests)
-                .eventDate(event.getEventDate())
-                .initiator(userService.toShortDto(event.getInitiator()))
-                .paid(event.getPaid())
-                .title(event.getTitle())
-                .views(views)
-                .build();
-    }
-
-    private Long getConfirmedCount(Long eventId) {
+    public Long getConfirmedCount(Long eventId) {
         return requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
     }
 
-    private Long getViewsForEvent(Long eventId) {
+    public Long getViewsForEvent(Long eventId) {
         List<ViewStats> stats = statClient.getStats(LocalDateTime.now().minusYears(1),
                 LocalDateTime.now(), List.of("/events/" + eventId), false).getBody();
         return stats != null && !stats.isEmpty() ? stats.get(0).getHits() : 0L;

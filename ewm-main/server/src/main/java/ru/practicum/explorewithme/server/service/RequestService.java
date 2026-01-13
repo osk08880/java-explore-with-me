@@ -17,6 +17,7 @@ import ru.practicum.explorewithme.server.exception.ConflictException;
 import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
 import ru.practicum.explorewithme.server.repository.EventRepository;
 import ru.practicum.explorewithme.server.repository.RequestRepository;
+import ru.practicum.explorewithme.server.mapper.RequestMapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ public class RequestService {
     private final RequestRepository requestRepository;
     private final EventRepository eventRepository;
     private final UserService userService;
+    private final RequestMapper requestMapper;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -47,6 +49,11 @@ public class RequestService {
     public ParticipationRequestDto create(Long userId, Long eventId) {
         log.info("Попытка создания запроса на участие: пользователь ID={}, событие ID={}", userId, eventId);
 
+        if (eventId == null) {
+            log.warn("Конфликт: eventId равен null для пользователя ID={}", userId);
+            throw new IllegalArgumentException("Параметр 'eventId' обязателен");
+        }
+
         userService.getById(userId);
 
         Event event = eventRepository.findByIdWithInitiator(eventId)
@@ -54,7 +61,7 @@ public class RequestService {
 
         if (event.getInitiator().getId().equals(userId)) {
             log.warn("Конфликт: пользователь ID={} пытается участвовать в своем событии ID={}", userId, eventId);
-            throw new ConflictException("Cannot request participation in your own event");
+            throw new ConflictException("Нельзя запрашивать участие в своем же собственном событии");
         }
 
         if (event.getState() != EventState.PUBLISHED) {
@@ -92,7 +99,7 @@ public class RequestService {
         entityManager.flush();
 
         log.info("Успешно создан запрос на участие: ID={}, статус={}", request.getId(), status.name());
-        return toDto(request);
+        return requestMapper.toDto(request);
     }
 
     @Transactional
@@ -107,7 +114,6 @@ public class RequestService {
             throw new IllegalArgumentException(NOT_YOUR_REQUEST);
         }
 
-        // Фикс для теста 2: Нельзя отменить CONFIRMED — 409
         if (request.getStatus() == RequestStatus.CONFIRMED) {
             log.warn("Конфликт: попытка отмены подтверждённого запроса ID={}", requestId);
             throw new ConflictException(CANNOT_CANCEL_CONFIRMED);
@@ -118,7 +124,7 @@ public class RequestService {
         entityManager.flush();
 
         log.info("Успешно отменён запрос: ID={}", requestId);
-        return toDto(request);
+        return requestMapper.toDto(request);
     }
 
     public List<ParticipationRequestDto> getByUser(Long userId) {
@@ -128,7 +134,9 @@ public class RequestService {
         List<Request> requests = requestRepository.findAllByRequesterId(userId);
         log.info("Найдено {} запросов для пользователя ID={}", requests.size(), userId);
 
-        return requests.stream().map(this::toDto).collect(Collectors.toList());
+        return requests.stream()
+                .map(requestMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     public List<ParticipationRequestDto> getByEvent(Long userId, Long eventId) {
@@ -137,7 +145,7 @@ public class RequestService {
         userService.getById(userId);
 
         Event event = eventRepository.findByIdWithInitiator(eventId)
-                .orElseThrow(() -> new EntityNotFoundException("Event with id=" + eventId + " was not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Событие с id=" + eventId + " не найдено"));
 
         if (!event.getInitiator().getId().equals(userId)) {
             log.warn("Ошибка прав: пользователь ID={} пытается получить запросы чужого события ID={}", userId, eventId);
@@ -147,7 +155,9 @@ public class RequestService {
         List<Request> requests = requestRepository.findAllByEventId(eventId);
         log.info("Найдено {} запросов для события ID={}", requests.size(), eventId);
 
-        return requests.stream().map(this::toDto).collect(Collectors.toList());
+        return requests.stream()
+                .map(requestMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -225,7 +235,7 @@ public class RequestService {
             entityManager.flush();
 
             additionalRejected = remainingPending.stream()
-                    .map(this::toDto)
+                    .map(requestMapper::toDto)
                     .collect(Collectors.toList());
 
             log.info("Автоматически отклонено {} дополнительных запросов для события ID={}",
@@ -233,11 +243,11 @@ public class RequestService {
         }
 
         List<ParticipationRequestDto> confirmedDtos = confirmed.stream()
-                .map(this::toDto)
+                .map(requestMapper::toDto)
                 .collect(Collectors.toList());
 
         List<ParticipationRequestDto> rejectedDtos = rejected.stream()
-                .map(this::toDto)
+                .map(requestMapper::toDto)
                 .collect(Collectors.toList());
 
         rejectedDtos.addAll(additionalRejected);
@@ -253,15 +263,5 @@ public class RequestService {
 
     public Long getConfirmedCount(Long eventId) {
         return requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
-    }
-
-    private ParticipationRequestDto toDto(Request request) {
-        return ParticipationRequestDto.builder()
-                .id(request.getId())
-                .created(request.getCreated())
-                .event(request.getEvent().getId())
-                .requester(request.getRequester().getId())
-                .status(request.getStatus().name())
-                .build();
     }
 }

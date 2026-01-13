@@ -14,6 +14,7 @@ import ru.practicum.explorewithme.server.exception.EntityNotFoundException;
 import ru.practicum.explorewithme.server.repository.CategoryRepository;
 import ru.practicum.explorewithme.server.entity.Category;
 import ru.practicum.explorewithme.server.repository.EventRepository;
+import ru.practicum.explorewithme.server.mapper.CategoryMapper;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,6 +25,8 @@ import java.util.stream.Collectors;
 public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final EventRepository eventRepository;
+    private final CategoryMapper categoryMapper;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -36,13 +39,11 @@ public class CategoryService {
         if (categoryRepository.existsByName(newCategory.getName())) {
             throw new IllegalStateException(String.format(CATEGORY_NAME_EXISTS, newCategory.getName()));
         }
-        Category category = Category.builder()
-                .name(newCategory.getName())
-                .build();
+        Category category = categoryMapper.toEntity(newCategory);
         category = categoryRepository.save(category);
         entityManager.flush();
         log.info("Категория создана с ID {}", category.getId());
-        return toDto(category);
+        return categoryMapper.toDto(category);
     }
 
     public CategoryDto update(Long catId, CategoryDto categoryDto) {
@@ -63,7 +64,7 @@ public class CategoryService {
         category = categoryRepository.save(category);
 
         log.info("Категория ID {} обновлена", catId);
-        return toDto(category);
+        return categoryMapper.toDto(category);
     }
 
     public void delete(Long catId) {
@@ -89,7 +90,9 @@ public class CategoryService {
         PageRequest pageable = PageRequest.of(from / size, size);
         Page<Category> page = categoryRepository.findAll(pageable);
         List<Category> categories = page.getContent();
-        return categories.stream().map(this::toDto).collect(Collectors.toList());
+        return categories.stream()
+                .map(categoryMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     public CategoryDto getById(Long catId) {
@@ -100,7 +103,7 @@ public class CategoryService {
                         String.format(CATEGORY_NOT_FOUND, catId)
                 ));
 
-        return toDto(category);
+        return categoryMapper.toDto(category);
     }
 
     @Transactional(readOnly = true)
@@ -111,12 +114,5 @@ public class CategoryService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         String.format(CATEGORY_NOT_FOUND, catId)
                 ));
-    }
-
-    public CategoryDto toDto(Category category) {
-        return CategoryDto.builder()
-                .id(category.getId())
-                .name(category.getName())
-                .build();
     }
 }
