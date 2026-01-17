@@ -1,15 +1,16 @@
 server:
-  port: 9090
+  port: 8080
 
 spring:
   application:
-    name: ewm-stats-server
+    name: ewm-main
   jpa:
     hibernate:
       ddl-auto: validate
+    show-sql: true
     properties:
       hibernate:
-        show_sql: false
+        format_sql: true
 
 management:
   endpoints:
@@ -22,5 +23,5 @@ management:
 
 logging:
   level:
-    root: INFO
-    ru.practicum: DEBUG
+    ru.practicum.explorewithme.server.exception: INFO  # ← INFO для handler debug
+    root: WARN  # Остальное WARN
