@@ -119,7 +119,7 @@ public class CommentService {
             throw new EntityNotFoundException(COMMENT_EVENT_MISMATCH);
         }
 
-        if (userId != ADMIN_ID && !comment.getAuthor().getId().equals(userId)) {
+        if (!ADMIN_ID.equals(userId) && !comment.getAuthor().getId().equals(userId)) {
             throw new IllegalStateException(COMMENT_ONLY_AUTHOR_DELETE);
         }
 
