@@ -41,6 +41,10 @@ public class CommentService {
     private static final String COMMENT_ONLY_AUTHOR_DELETE = "Доступ запрещён: только автор комментария или администратор может выполнить операцию";
     private static final String COMMENT_ONLY_PUBLISHED_EVENT = "Комментарии возможны только для опубликованных событий";
 
+    private static final String COMMENT_CREATE_LOG = "Комментарий создан: id={}, eventId={}, userId={}";
+    private static final String COMMENT_UPDATE_LOG = "Комментарий обновлён: id={}, eventId={}, userId={}";
+    private static final String COMMENT_DELETE_LOG = "Комментарий удалён: id={}, eventId={}, userId={}";
+
     @Transactional
     public CommentDto createComment(Long userId, Long eventId, NewCommentDto dto) {
 
@@ -59,7 +63,7 @@ public class CommentService {
         Comment comment = commentMapper.toEntity(dto, author, event);
         comment = commentRepository.save(comment);
 
-        log.info("Комментарий создан: id={}, eventId={}, userId={}", comment.getId(), eventId, userId);
+        log.info(COMMENT_CREATE_LOG, comment.getId(), eventId, userId);
 
         return commentMapper.toDto(comment);
     }
@@ -85,7 +89,7 @@ public class CommentService {
         comment.setText(dto.getText());
         comment = commentRepository.save(comment);
 
-        log.info("Комментарий обновлён: id={}, eventId={}, userId={}", commentId, eventId, userId);
+        log.info(COMMENT_UPDATE_LOG, commentId, eventId, userId);
 
         return commentMapper.toDto(comment);
     }
@@ -121,7 +125,7 @@ public class CommentService {
 
         commentRepository.delete(comment);
 
-        log.info("Комментарий удалён: id={}, eventId={}, userId={}", commentId, eventId, userId);
+        log.info(COMMENT_DELETE_LOG, commentId, eventId, userId);
     }
 
     public Long getCommentCount(Long eventId) {
