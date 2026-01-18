@@ -44,6 +44,11 @@ public class RequestService {
     private static final String ALREADY_REQUESTED = "Already requested participation in this event";
     private static final String CANNOT_CANCEL_CONFIRMED = "Only pending or rejected requests can be canceled";
     private static final String CANNOT_MODIFY_NON_PENDING = "Request must have status PENDING";
+    private static final String EVENT_NOT_FOUND = "Event with id=%d was not found";
+    private static final String EVENT_NOT_PUBLISHED = "Событие не опубликовано";
+    private static final String EVENT_SELF_PARTICIPATION_DENIED = "Нельзя запрашивать участие в своем же собственном событии";
+    private static final String EVENT_USER_ACCESS_DENIED = "This is not your event";
+    private static final String STATUS_CONFIRMED = "CONFIRMED";
 
     @Transactional
     public ParticipationRequestDto create(Long userId, Long eventId) {
@@ -57,16 +62,16 @@ public class RequestService {
         userService.getById(userId);
 
         Event event = eventRepository.findByIdWithInitiator(eventId)
-                .orElseThrow(() -> new EntityNotFoundException("Event with id=" + eventId + " was not found"));
+                .orElseThrow(() -> new EntityNotFoundException(String.format(EVENT_NOT_FOUND, eventId)));
 
         if (event.getInitiator().getId().equals(userId)) {
             log.warn("Конфликт: пользователь ID={} пытается участвовать в своем событии ID={}", userId, eventId);
-            throw new ConflictException("Нельзя запрашивать участие в своем же собственном событии");
+            throw new ConflictException(EVENT_SELF_PARTICIPATION_DENIED);
         }
 
         if (event.getState() != EventState.PUBLISHED) {
             log.warn("Конфликт: событие ID={} не опубликовано (состояние={})", eventId, event.getState());
-            throw new ConflictException("Событие не опубликовано");
+            throw new ConflictException(EVENT_NOT_PUBLISHED);
         }
 
         if (requestRepository.existsByEventIdAndRequesterId(eventId, userId)) {
@@ -145,7 +150,7 @@ public class RequestService {
         userService.getById(userId);
 
         Event event = eventRepository.findByIdWithInitiator(eventId)
-                .orElseThrow(() -> new EntityNotFoundException("Событие с id=" + eventId + " не найдено"));
+                .orElseThrow(() -> new EntityNotFoundException(String.format(EVENT_NOT_FOUND, eventId)));
 
         if (!event.getInitiator().getId().equals(userId)) {
             log.warn("Ошибка прав: пользователь ID={} пытается получить запросы чужого события ID={}", userId, eventId);
@@ -172,7 +177,7 @@ public class RequestService {
         userService.getById(userId);
 
         Event event = eventRepository.findByIdWithInitiator(eventId)
-                .orElseThrow(() -> new EntityNotFoundException("Event with id=" + eventId + " was not found"));
+                .orElseThrow(() -> new EntityNotFoundException(String.format(EVENT_NOT_FOUND, eventId)));
 
         if (!event.getInitiator().getId().equals(userId)) {
             log.warn("Ошибка прав: пользователь ID={} пытается изменить статусы чужого события ID={}", userId, eventId);
@@ -195,7 +200,7 @@ public class RequestService {
 
         Long confirmedCount = getConfirmedCount(eventId);
 
-        if ("CONFIRMED".equals(update.getStatus())
+        if (STATUS_CONFIRMED.equals(update.getStatus())
                 && event.getParticipantLimit() > 0
                 && confirmedCount >= event.getParticipantLimit()) {
             log.warn("Конфликт: лимит участников уже достигнут для события ID={}", eventId);
@@ -210,7 +215,7 @@ public class RequestService {
         List<Request> rejected = new ArrayList<>();
 
         for (Request r : pendingRequests) {
-            if ("CONFIRMED".equals(update.getStatus())) {
+            if (STATUS_CONFIRMED.equals(update.getStatus())) {
                 r.setStatus(RequestStatus.CONFIRMED);
                 confirmed.add(r);
             } else {
@@ -223,7 +228,7 @@ public class RequestService {
         entityManager.flush();
 
         List<ParticipationRequestDto> additionalRejected = new ArrayList<>();
-        if ("CONFIRMED".equals(update.getStatus())
+        if (STATUS_CONFIRMED.equals(update.getStatus())
                 && event.getParticipantLimit() > 0
                 && confirmedCount + confirmed.size() >= event.getParticipantLimit()) {
 

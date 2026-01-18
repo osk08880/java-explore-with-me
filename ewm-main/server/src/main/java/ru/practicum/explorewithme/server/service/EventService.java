@@ -34,6 +34,7 @@ public class EventService {
     private final RequestRepository requestRepository;
     private final StatClient statClient;
     private final EventMapper eventMapper;
+    private final CommentService commentService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -44,17 +45,22 @@ public class EventService {
     private static final long USER_HOURS_AHEAD = 2L;
     private static final long ADMIN_HOURS_AHEAD = 1L;
 
+    private static final String EVENT_NOT_FOUND = "Событие c id=%d не найдено";
+    private static final String EVENT_USER_ACCESS_DENIED = "Событие недоступно для этого пользователя";
+    private static final String EVENT_PUBLISHED_UPDATE_DENIED = "Опубликованные события нельзя обновлять";
+    private static final String EVENT_DATE_TOO_SOON_USER = "Дата события должна быть не менее чем через 2 часа";
+    private static final String EVENT_DATE_TOO_SOON_ADMIN = "Дата события должна быть не менее чем через 1 час";
+    private static final String EVENT_INVALID_ACTION = "Неверное действие для текущего состояния";
+    private static final String EVENT_RANGE_INVALID = "Неверный диапазон дат: rangeStart должен быть раньше rangeEnd";
+    private static final String EVENT_PUBLISH_DENIED = "Невозможно опубликовать событие, текущее состояние: %s";
+    private static final String EVENT_REJECT_PUBLISHED_DENIED = "Опубликованные события нельзя отклонять";
+    private static final String EVENT_INVALID_STATE_ACTION = "Неверное действие stateAction: %s";
+    private static final String EVENT_NOT_PUBLISHED = "Событие не опубликовано";
+
     @Transactional
     public EventFullDto create(Long userId, NewEventDto newEvent) {
-        log.info("Создание события для пользователя {} с заголовком '{}'", userId, newEvent.getTitle());
         User user = userService.getById(userId);
-
-        if (newEvent.getEventDate().isBefore(LocalDateTime.now().plusHours(USER_HOURS_AHEAD))) {
-            throw new IllegalArgumentException("Дата события должна быть не менее чем через 2 часа");
-        }
-
         Category category = categoryService.getEntityById(newEvent.getCategory());
-
         EventLocation locationEntity = convertToEntity(newEvent.getLocation());
 
         Event event = Event.builder()
@@ -74,12 +80,12 @@ public class EventService {
 
         event = eventRepository.save(event);
         entityManager.flush();
-        log.info("Событие создано с ID {}", event.getId());
 
         Long confirmedRequests = getConfirmedCount(event.getId());
         Long views = getViewsForEvent(event.getId());
+        Long commentCount = commentService.getCommentCount(event.getId());
 
-        return eventMapper.toFullDto(event, confirmedRequests, views, true);
+        return eventMapper.toFullDto(event, confirmedRequests, views, true, commentCount);
     }
 
     public EventFullDto updateUser(Long userId, Long eventId, UpdateEventUserRequest update) {
@@ -87,13 +93,13 @@ public class EventService {
         Event event = getById(eventId);
 
         if (!event.getInitiator().getId().equals(userId)) {
-            throw new EntityNotFoundException("Событие недоступно для этого пользователя");
+            throw new EntityNotFoundException(EVENT_USER_ACCESS_DENIED);
         }
         if (event.getState() == EventState.PUBLISHED) {
-            throw new IllegalStateException("Опубликованные события нельзя обновлять");
+            throw new IllegalStateException(EVENT_PUBLISHED_UPDATE_DENIED);
         }
         if (update.getEventDate() != null && update.getEventDate().isBefore(LocalDateTime.now().plusHours(USER_HOURS_AHEAD))) {
-            throw new IllegalArgumentException("Дата события должна быть не менее чем через 2 часа");
+            throw new IllegalArgumentException(EVENT_DATE_TOO_SOON_USER);
         }
         if (update.getStateAction() != null) {
             switch (update.getStateAction()) {
@@ -104,7 +110,7 @@ public class EventService {
                     if (event.getState() == EventState.PENDING) event.setState(EventState.CANCELED);
                     break;
                 default:
-                    throw new IllegalStateException("Неверное действие для текущего состояния");
+                    throw new IllegalStateException(EVENT_INVALID_ACTION);
             }
         }
         updateFieldsUser(event, update);
@@ -113,8 +119,9 @@ public class EventService {
 
         Long confirmedRequests = getConfirmedCount(event.getId());
         Long views = getViewsForEvent(event.getId());
+        Long commentCount = commentService.getCommentCount(event.getId());
 
-        return eventMapper.toFullDto(event, confirmedRequests, views, false);
+        return eventMapper.toFullDto(event, confirmedRequests, views, false, commentCount);
     }
 
     @Transactional
@@ -124,24 +131,24 @@ public class EventService {
 
         if (update.getEventDate() != null &&
                 update.getEventDate().isBefore(LocalDateTime.now().plusHours(ADMIN_HOURS_AHEAD))) {
-            throw new IllegalArgumentException("Дата события должна быть не менее чем через 1 час");
+            throw new IllegalArgumentException(EVENT_DATE_TOO_SOON_ADMIN);
         }
 
         if (update.getStateAction() != null) {
             switch (update.getStateAction()) {
                 case "PUBLISH_EVENT":
                     if (event.getState() != EventState.PENDING)
-                        throw new IllegalStateException("Невозможно опубликовать событие, текущее состояние: " + event.getState());
+                        throw new IllegalStateException(String.format(EVENT_PUBLISH_DENIED, event.getState()));
                     event.setState(EventState.PUBLISHED);
                     event.setPublishedOn(LocalDateTime.now());
                     break;
                 case "REJECT_EVENT":
                     if (event.getState() == EventState.PUBLISHED)
-                        throw new IllegalStateException("Опубликованные события нельзя отклонять");
+                        throw new IllegalStateException(EVENT_REJECT_PUBLISHED_DENIED);
                     event.setState(EventState.CANCELED);
                     break;
                 default:
-                    throw new IllegalStateException("Неверное действие stateAction: " + update.getStateAction());
+                    throw new IllegalStateException(String.format(EVENT_INVALID_STATE_ACTION, update.getStateAction()));
             }
         }
 
@@ -151,8 +158,9 @@ public class EventService {
 
         Long confirmedRequests = getConfirmedCount(event.getId());
         Long views = getViewsForEvent(event.getId());
+        Long commentCount = commentService.getCommentCount(event.getId());
 
-        return eventMapper.toFullDto(event, confirmedRequests, views, false);
+        return eventMapper.toFullDto(event, confirmedRequests, views, false, commentCount);
     }
 
     public List<EventShortDto> getUserEvents(Long userId, Integer from, Integer size) {
@@ -189,11 +197,17 @@ public class EventService {
         PageRequest pageable = PageRequest.of(from / size, size, sortBy);
 
         List<Event> events = eventRepository.findAdminEvents(users, states, categories, rangeStart, rangeEnd, pageable);
+
         return events.stream()
                 .map(e -> {
                     Long confirmedRequests = getConfirmedCount(e.getId());
                     Long views = getViewsForEvent(e.getId());
-                    return eventMapper.toFullDto(e, confirmedRequests, views, false);
+                    Long commentCount = commentService.getCommentCount(e.getId());
+
+                    log.debug("Админ просмотр события {}: confirmed={}, views={}, comments={}",
+                            e.getId(), confirmedRequests, views, commentCount);
+
+                    return eventMapper.toFullDto(e, confirmedRequests, views, false, commentCount);
                 })
                 .collect(Collectors.toList());
     }
@@ -213,7 +227,7 @@ public class EventService {
 
         if (rangeStart != null && rangeEnd != null && start.isAfter(end)) {
             log.warn("Неверный диапазон дат: rangeStart после rangeEnd");
-            throw new IllegalArgumentException("Неверный диапазон дат: rangeStart должен быть раньше rangeEnd");
+            throw new IllegalArgumentException(EVENT_RANGE_INVALID);
         }
 
         String searchText = (text == null || text.trim().isEmpty()) ? "" : text.trim();
@@ -260,7 +274,7 @@ public class EventService {
         Event event = getById(eventId);
 
         if (event.getState() != EventState.PUBLISHED) {
-            throw new EntityNotFoundException("Событие не опубликовано");
+            throw new EntityNotFoundException(EVENT_NOT_PUBLISHED);
         }
 
         EndpointHit hit = EndpointHit.builder()
@@ -275,8 +289,9 @@ public class EventService {
         views = (views != null ? views : 0L) + 1;
 
         Long confirmedRequests = getConfirmedCount(event.getId());
+        Long commentCount = commentService.getCommentCount(event.getId());
 
-        EventFullDto dto = eventMapper.toFullDto(event, confirmedRequests, views, false);
+        EventFullDto dto = eventMapper.toFullDto(event, confirmedRequests, views, false, commentCount);
         dto.setViews(views);
 
         log.info("Просмотр события {} после запроса {}: {}", eventId, remoteAddr, dto.getViews());
@@ -287,19 +302,23 @@ public class EventService {
     public EventFullDto getUserEvent(Long userId, Long eventId) {
         Event event = getById(eventId);
         if (!event.getInitiator().getId().equals(userId)) {
-            throw new EntityNotFoundException("Событие недоступно для этого пользователя");
+            throw new EntityNotFoundException(EVENT_USER_ACCESS_DENIED);
         }
 
         Long confirmedRequests = getConfirmedCount(event.getId());
         Long views = getViewsForEvent(event.getId());
+        Long commentCount = commentService.getCommentCount(event.getId());
 
-        return eventMapper.toFullDto(event, confirmedRequests, views, false);
+        log.info("Получение события пользователем {}: eventId={}, views={}, comments={}", userId, eventId, views, commentCount);
+
+        return eventMapper.toFullDto(event, confirmedRequests, views, false, commentCount);
     }
 
     @Transactional(readOnly = true)
     public Event getById(Long eventId) {
+        log.debug("Получение события по ID {}", eventId);
         return eventRepository.findById(eventId)
-                .orElseThrow(() -> new EntityNotFoundException("Событие c id=" + eventId + " не найдено"));
+                .orElseThrow(() -> new EntityNotFoundException(String.format(EVENT_NOT_FOUND, eventId)));
     }
 
     private void updateFieldsUser(Event event, UpdateEventUserRequest update) {
