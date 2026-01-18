@@ -7,21 +7,20 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+      show-sql: true
     properties:
       hibernate:
         format_sql: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,metrics,info
-  endpoint:
-    health:
-      show-details: always
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,metrics,info
+    endpoint:
+      health:
+        show-details: always
 
 logging:
   level:
-    ru.practicum.explorewithme.server.exception: INFO  # ← INFO для handler debug
-    root: WARN  # Остальное WARN
+    ru.practicum.explorewithme.server.exception: INFO
+    root: WARN

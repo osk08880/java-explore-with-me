@@ -30,12 +30,14 @@ public class UserService {
     private EntityManager entityManager;
 
     private static final String USER_NOT_FOUND = "Пользователь с id=%d не найден";
+    private static final String EMAIL_EXISTS = "Email уже существует: %s";
+    private static final String CANNOT_DELETE_WITH_EVENTS = "Нельзя удалить пользователя с связанными событиями";
 
     @Transactional
     public UserDto create(NewUserRequest newUser) {
         log.info("Создание пользователя с email '{}'", newUser.getEmail());
         if (userRepository.existsByEmail(newUser.getEmail())) {
-            throw new IllegalStateException("Email уже существует: " + newUser.getEmail());
+            throw new IllegalStateException(String.format(EMAIL_EXISTS, newUser.getEmail()));
         }
         User user = userMapper.toEntity(newUser);
         user = userRepository.save(user);
@@ -74,7 +76,7 @@ public class UserService {
 
         if (hasEvents) {
             log.warn("Нельзя удалить пользователя ID {} — есть связанные события", userId);
-            throw new IllegalStateException("Нельзя удалить пользователя с связанными событиями");
+            throw new IllegalStateException(CANNOT_DELETE_WITH_EVENTS);
         }
 
         userRepository.delete(user);

@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException e) {
-        log.warn("BAD_REQUEST: {}", e.getMessage());
+        log.warn("BAD_REQUEST: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException e) {
-        log.warn("CONFLICT: {}", e.getMessage());
+        log.warn("CONFLICT: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.CONFLICT.name())
                 .reason("For the requested operation the conditions are not met.")
@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiError> handleConflict(ConflictException e) {
-        log.warn("CONFLICT: {}", e.getMessage());
+        log.warn("CONFLICT: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.CONFLICT.name())
                 .reason("Integrity constraint violation")
@@ -69,8 +69,20 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ApiError> handleCustomNotFound(EntityNotFoundException e) {
-        log.warn("NOT_FOUND custom: {}", e.getMessage());
+    public ResponseEntity<ApiError> handleEntityNotFound(EntityNotFoundException e) {
+        log.warn("NOT_FOUND: {}", e.getMessage(), e);
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.NOT_FOUND.name())
+                .reason("The required object was not found.")
+                .message(e.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(NotFoundException e) {
+        log.warn("NOT_FOUND: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.NOT_FOUND.name())
                 .reason("The required object was not found.")
@@ -87,7 +99,7 @@ public class GlobalExceptionHandler {
                 .map((FieldError error) -> String.format("Field: %s. Error: %s. Value: %s",
                         error.getField(), error.getDefaultMessage(), error.getRejectedValue()))
                 .collect(Collectors.joining(". "));
-        log.warn("BAD_REQUEST validation: {}", message);
+        log.warn("BAD_REQUEST validation: {}", message, e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
@@ -104,7 +116,7 @@ public class GlobalExceptionHandler {
                 .map(error -> String.format("Field: %s. Error: %s. Value: %s",
                         error.getField(), error.getDefaultMessage(), error.getRejectedValue()))
                 .collect(Collectors.joining(". "));
-        log.warn("BAD_REQUEST bind validation: {}", message);
+        log.warn("BAD_REQUEST bind validation: {}", message, e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
@@ -119,9 +131,11 @@ public class GlobalExceptionHandler {
         log.info("CONSTRAINT VIOLATION HANDLER CALLED: {}", e.getClass().getName());
         String message = e.getConstraintViolations().stream()
                 .map(violation -> String.format("Field: %s. Error: %s. Value: %s",
-                        violation.getPropertyPath(), violation.getMessage(), violation.getInvalidValue()))
+                        violation.getPropertyPath().toString(),  // Фикс: toString() для Path
+                        violation.getMessage(),
+                        violation.getInvalidValue()))
                 .collect(Collectors.joining(". "));
-        log.warn("BAD_REQUEST constraint validation: {}", message);
+        log.warn("BAD_REQUEST constraint validation: {}", message, e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
@@ -133,7 +147,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TypeMismatchException.class)
     public ResponseEntity<ApiError> handleTypeMismatch(TypeMismatchException e) {
-        log.warn("BAD_REQUEST type mismatch: {}", e.getMessage());
+        log.warn("BAD_REQUEST type mismatch: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
@@ -145,7 +159,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiError> handleMissingRequestParam(MissingServletRequestParameterException e) {
-        log.warn("BAD_REQUEST missing request param: {}", e.getParameterName());
+        log.warn("BAD_REQUEST missing request param: {}", e.getParameterName(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Required request parameter is missing.")
@@ -157,35 +171,31 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleHttpMessageNotReadable(HttpMessageNotReadableException e) {
-        log.warn("BAD_REQUEST JSON parse error", e);
-
+        log.warn("BAD_REQUEST JSON parse error: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
-                .message("Invalid request body")
+                .message("Invalid request body: " + e.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();
-
         return ResponseEntity.badRequest().body(error);
     }
 
     @ExceptionHandler(InvalidFormatException.class)
     public ResponseEntity<ApiError> handleInvalidFormat(InvalidFormatException e) {
-        log.warn("BAD_REQUEST invalid format", e);
-
+        log.warn("BAD_REQUEST invalid format: path={}, message={}", e.getPath(), e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST.name())
                 .reason("Incorrectly made request.")
-                .message("Invalid format of request field")
+                .message("Invalid format of request field: " + e.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();
-
         return ResponseEntity.badRequest().body(error);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException e) {
-        log.warn("CONFLICT data integrity: {}", e.getMessage());
+        log.warn("CONFLICT data integrity: {}", e.getMessage(), e);
         ApiError error = ApiError.builder()
                 .status(HttpStatus.CONFLICT.name())
                 .reason("For the requested operation the conditions are not met.")
